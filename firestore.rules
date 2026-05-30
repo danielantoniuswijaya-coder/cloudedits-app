@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Definition
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com' || request.auth.token.firebase.sign_in_provider == 'password');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validate User Profile
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.email is string && data.email.size() <= 200
+        && (data.role == "Editor" || data.role == "Client")
+        && (data.subscription == "Starter" || data.subscription == "Professional" || data.subscription == "Agency")
+        && (data.createdAt is timestamp);
+    }
+
+    // Validate Project
+    function isValidProject(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.description is string && data.description.size() <= 2000
+        && (data.status == "Pending" || data.status == "Editing" || data.status == "Revision" || data.status == "Completed")
+        && data.ownerId is string && data.ownerId.size() <= 128
+        && data.ownerEmail is string && data.ownerEmail.size() <= 200
+        && data.ownerName is string && data.ownerName.size() <= 200
+        && data.editorId is string && data.editorId.size() <= 128
+        && data.editorEmail is string && data.editorEmail.size() <= 200
+        && data.editorName is string && data.editorName.size() <= 200
+        && data.videoUrl is string && data.videoUrl.size() <= 2000
+        && data.videoName is string && data.videoName.size() <= 500
+        && (data.subscriptionType == "Starter" || data.subscriptionType == "Professional" || data.subscriptionType == "Agency")
+        && (data.createdAt is timestamp);
+    }
+
+    // Validate Revision
+    function isValidRevision(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.projectId is string && data.projectId.size() <= 128
+        && data.comment is string && data.comment.size() > 0 && data.comment.size() <= 5000
+        && data.timestamp is string && data.timestamp.size() <= 20
+        && data.userId is string && data.userId.size() <= 128
+        && data.userName is string && data.userName.size() <= 200
+        && (data.userRole == "Editor" || data.userRole == "Client")
+        && (data.status == "open" || data.status == "resolved")
+        && (data.createdAt is timestamp);
+    }
+
+    // Collection: Users
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isEmailVerified() && userId == request.auth.uid && isValidUser(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if isEmailVerified() && userId == request.auth.uid && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().role == existing().role
+        && incoming().subscription == existing().subscription;
+    }
+
+    // Collection: Projects
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && (existing().ownerId == request.auth.uid || existing().editorId == request.auth.uid || existing().status == "Pending");
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.editorId == request.auth.uid || resource.data.status == "Pending");
+      
+      allow create: if isEmailVerified() && isValidProject(incoming()) && incoming().ownerId == request.auth.uid && incoming().createdAt == request.time;
+      
+      allow update: if isEmailVerified() && isValidProject(incoming()) && (
+        existing().status != "Completed" && (
+          (incoming().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'updatedAt'])) ||
+          
+          (existing().status == "Pending" && existing().editorId == "" && incoming().editorId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAll(['editorId', 'editorEmail', 'editorName', 'status', 'updatedAt']) && incoming().diff(existing()).affectedKeys().hasOnly(['editorId', 'editorEmail', 'editorName', 'status', 'updatedAt'])) ||
+          
+          (existing().editorId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAny(['videoUrl', 'videoName', 'status', 'updatedAt']) && incoming().diff(existing()).affectedKeys().hasOnly(['videoUrl', 'videoName', 'status', 'updatedAt'])) ||
+          
+          (existing().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        )
+      );
+
+      // Support Subcollection: Revisions
+      match /revisions/{revisionId} {
+        allow get, list: if isSignedIn() && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.editorId == request.auth.uid
+        );
+        allow create: if isEmailVerified() && isValidRevision(incoming()) && incoming().userId == request.auth.uid && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.editorId == request.auth.uid
+        ) && incoming().createdAt == request.time;
+        
+        allow update: if isEmailVerified() && isValidRevision(incoming()) && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.editorId == request.auth.uid
+        ) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'comment', 'timestamp']);
+      }
+    }
+  }
+}

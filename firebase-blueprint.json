@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information, roles, and subscriptions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Editor", "Client"] },
+        "subscription": { "type": "string", "enum": ["Starter", "Professional", "Agency"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "subscription", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A video editing project managed by Editor and Client",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Editing", "Revision", "Completed"] },
+        "ownerId": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "editorId": { "type": "string" },
+        "editorEmail": { "type": "string" },
+        "editorName": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "videoName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "subscriptionType": { "type": "string", "enum": ["Starter", "Professional", "Agency"] },
+        "attachments": { "type": "array" }
+      },
+      "required": ["id", "name", "description", "status", "ownerId", "ownerEmail", "ownerName", "editorId", "editorEmail", "editorName", "createdAt", "updatedAt", "subscriptionType"]
+    },
+    "Revision": {
+      "title": "Revision Note",
+      "description": "A revision comment made by a client or editor on a project's timeline",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "comment": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "comment", "timestamp", "userId", "userName", "userRole", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "projects/{projectId}": {
+      "schema": "Project",
+      "description": "Editing projects"
+    },
+    "projects/{projectId}/revisions/{revisionId}": {
+      "schema": "Revision",
+      "description": "Revisions on a specific project"
+    }
+  }
+}

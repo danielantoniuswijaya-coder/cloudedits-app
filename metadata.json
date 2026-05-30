@@ -1,0 +1,6 @@
+{
+  "name": "CloudEdits",
+  "description": "Platform kolrasi antara editor video dan klien untuk mengelola proyek editing video secara online.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
